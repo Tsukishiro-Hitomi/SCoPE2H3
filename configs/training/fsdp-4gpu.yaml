@@ -1,0 +1,8 @@
+# Use with: accelerate launch --config_file configs/training/fsdp-4gpu.yaml ...
+compute_environment: LOCAL_MACHINE
+distributed_type: FSDP
+mixed_precision: bf16
+num_processes: 4
+fsdp_config:
+  fsdp_sharding_strategy: FULL_SHARD
+  fsdp_use_orig_params: true

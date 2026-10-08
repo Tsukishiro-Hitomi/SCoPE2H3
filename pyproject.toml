@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "scope2h3"
+version = "0.1.0"
+description = "MiniMax H3 Ref2VA with SCoPE camera conditioning"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+dependencies = [
+    "torch>=2.0.0",
+    "torchvision",
+    "transformers",
+    "imageio[ffmpeg]",
+    "safetensors",
+    "einops",
+    "modelscope",
+    "ftfy",
+    "pandas",
+    "accelerate",
+    "peft",
+]
+
+[project.optional-dependencies]
+audio = ["av", "torchaudio", "torchcodec", "librosa"]
+training = ["deepspeed", "tensorboard"]
+test = ["pytest"]
+
+[project.scripts]
+scope2h3-infer = "scope2h3.inference:main"
+scope2h3-train = "scope2h3.training:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["diffsynth", "diffsynth.*", "scope2h3", "scope2h3.*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

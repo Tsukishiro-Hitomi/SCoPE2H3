@@ -1,0 +1,21 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+build/
+dist/
+*.egg-info/
+
+# Large local artifacts and experiment state
+local/
+checkpoints/
+outputs/
+runs/
+data/*_dataset/
+data/**/*.mp4
+data/**/*.wav
+data/**/*.npy
+*.safetensors
+*.pth
+*.pt
+*.ckpt

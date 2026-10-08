@@ -1,0 +1,8 @@
+name: scope2h3
+channels:
+  - defaults
+dependencies:
+  - python=3.10
+  - pip
+# Install project dependencies after creating the environment:
+#   python -m pip install -e '.[audio,training,test]'

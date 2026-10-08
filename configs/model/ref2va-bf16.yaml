@@ -1,0 +1,3 @@
+model_dir: local/models/MiniMax-H3-Ref2VA-BF16
+variant_root: Ref2VA
+dtype: bfloat16

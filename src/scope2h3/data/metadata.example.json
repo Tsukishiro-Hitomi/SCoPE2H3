@@ -1,0 +1,12 @@
+[
+  {
+    "video": "videos/scene_0001.mp4",
+    "input_audio": "videos/scene_0001.mp4",
+    "references": [
+      {"type": "image", "image": "references/scene_0001_first.jpg"}
+    ],
+    "camera_poses": "poses/scene_0001.npy",
+    "camera_x_fov": 1.0471975512,
+    "prompt": "A cinematic slow dolly forward through the scene."
+  }
+]
