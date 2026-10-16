@@ -498,7 +498,15 @@ def main() -> None:
         if accelerator.num_processes > 1:
             construction_seconds = float(accelerator.reduce(torch.tensor(construction_seconds, device=accelerator.device, dtype=torch.float64), reduction="max").item())
         profiler.timing_record(step=None, phase="model_weight_construction", seconds_max_rank=construction_seconds)
-    logger = ModelLogger(args.output_path, remove_prefix_in_ckpt="pipe.dit.", enable_tensorboard_log=args.enable_tensorboard_log, enable_csv_log=args.enable_csv_log, enable_wandb_log=args.enable_wandb_log, wandb_project=args.wandb_project)
+    logger = ModelLogger(
+        args.output_path,
+        remove_prefix_in_ckpt="pipe.dit.",
+        enable_tensorboard_log=args.enable_tensorboard_log,
+        enable_csv_log=args.enable_csv_log,
+        enable_wandb_log=args.enable_wandb_log,
+        wandb_project=args.wandb_project,
+        initial_step=args.initial_step,
+    )
     launch_profiled_training_task(accelerator, dataset, model, logger, args=args, profiler=profiler)
 
 

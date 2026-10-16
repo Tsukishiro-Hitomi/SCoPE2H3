@@ -75,11 +75,15 @@ class ModelLogger:
         enable_swanlab_log=False, swanlab_project="DiffSynth-Studio",
         enable_wandb_log=False, wandb_project="DiffSynth-Studio",
         enable_csv_log=False,
+        initial_step=0,
     ):
         self.output_path = output_path
         self.remove_prefix_in_ckpt = remove_prefix_in_ckpt
         self.state_dict_converter = state_dict_converter
-        self.num_steps = 0
+        # A resumed run appends to the same CSV/TensorBoard stream.  Keep
+        # scalar steps global so curves do not restart at zero after a
+        # platform pre-emption.
+        self.num_steps = initial_step
         # Loggers
         self.enable_tensorboard_log = enable_tensorboard_log
         self.enable_swanlab_log = enable_swanlab_log
