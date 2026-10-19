@@ -64,6 +64,13 @@ def wrap_dit_and_text_encoder_with_fsdp(model: "ScopeH3TrainingModule", accelera
         param_dtype=torch.bfloat16,
         reduce_dtype=torch.bfloat16,
         buffer_dtype=torch.bfloat16,
+        # The DiT root receives camera coordinates and diffusion times along
+        # with model activations.  FSDP otherwise defaults to casting every
+        # floating-point root input to param_dtype, which quantizes those
+        # continuous conditioning values to BF16.  Keep inputs at the dtype
+        # produced by the pipeline while FSDP still materializes parameters
+        # and reduces gradients in BF16.
+        cast_root_forward_inputs=False,
     )
     common = dict(
         sharding_strategy=ShardingStrategy.FULL_SHARD,
