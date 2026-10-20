@@ -69,6 +69,16 @@ def load_pipeline(model_dir: Path, *, vram_reserve_gb: float = 5.0) -> Any:
     )
 
 
+def load_scope_pipeline(model_dir: Path, adapter_path: Path, *, vram_reserve_gb: float = 5.0) -> Any:
+    """Load Ref2VA and one validated adapter-only SCoPE checkpoint."""
+    from .adapter import install_scope_h3, load_scope_adapter_weights
+
+    pipe = load_pipeline(model_dir, vram_reserve_gb=vram_reserve_gb)
+    install_scope_h3(pipe)
+    load_scope_adapter_weights(pipe, str(adapter_path))
+    return pipe
+
+
 def parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Generate a Ref2VA video with local MiniMax H3 weights.")
     parser.add_argument("--model-dir", type=Path, required=True)
@@ -81,6 +91,9 @@ def parser() -> argparse.ArgumentParser:
     parser.add_argument("--steps", type=int, default=50)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--vram-reserve-gb", type=float, default=5.0)
+    parser.add_argument("--adapter-path", type=Path, default=None, help="SCoPE adapter-only safetensors checkpoint")
+    parser.add_argument("--camera-poses", type=Path, default=None, help="OpenCV c2w .npy trajectory; required with --adapter-path")
+    parser.add_argument("--camera-x-fov", type=float, default=None, help="horizontal FOV in radians; required with --adapter-path")
     return parser
 
 
@@ -99,7 +112,19 @@ def main() -> None:
     from PIL import Image
     from diffsynth.utils.data.audio_video import write_video_audio
 
-    pipe = load_pipeline(args.model_dir, vram_reserve_gb=args.vram_reserve_gb)
+    using_scope = args.adapter_path is not None or args.camera_poses is not None or args.camera_x_fov is not None
+    if using_scope and (args.adapter_path is None or args.camera_poses is None or args.camera_x_fov is None):
+        raise ValueError("--adapter-path, --camera-poses, and --camera-x-fov must be supplied together")
+    if using_scope:
+        import numpy as np
+        import torch
+        from .adapter import set_scope_camera
+
+        pipe = load_scope_pipeline(args.model_dir, args.adapter_path, vram_reserve_gb=args.vram_reserve_gb)
+        poses = torch.from_numpy(np.load(args.camera_poses, allow_pickle=False)).to(torch.float32)
+        set_scope_camera(pipe, poses, args.camera_x_fov)
+    else:
+        pipe = load_pipeline(args.model_dir, vram_reserve_gb=args.vram_reserve_gb)
     frames = aligned_frames(args.seconds)
     output = (args.output or Path("local/outputs") / f"ref2va_{time.strftime('%Y%m%d_%H%M%S')}.mp4").expanduser().resolve()
     output.parent.mkdir(parents=True, exist_ok=True)

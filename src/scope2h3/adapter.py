@@ -36,6 +36,14 @@ def _scope_attention_forward(self, x, *, rope_freqs, cu_seqlens, max_seqlen=None
             raise RuntimeError("SCoPE target positions and Pluecker rows differ")
         selected_q = query.index_select(0, positions)
         selected_k = key.index_select(0, positions)
+        # DiffSynth's inference offloader knows the original H3 modules but
+        # cannot know about this runtime-added adapter.  Move this small
+        # (~58 MiB total) adapter on first use with its owning attention
+        # block; without this explicit handoff its weights remain on CPU while
+        # the packed Q/K rows are on CUDA.
+        scope_parameter = next(self.scope_pe.parameters())
+        if scope_parameter.device != query.device or scope_parameter.dtype != query.dtype:
+            self.scope_pe.to(device=query.device, dtype=query.dtype)
         selected_q, selected_k = self.scope_pe(selected_q, selected_k, plucker.to(query.device))
         query, key = query.clone(), key.clone()
         query.index_copy_(0, positions, selected_q)
@@ -116,7 +124,14 @@ def install_scope_h3(pipe: Any, *, scale_gate_hidden: int = 64) -> Any:
     for block in pipe.dit.blocks:
         attn = block.attn
         inner_dim = int(attn.num_heads * attn.head_dim)
-        attn.add_module("scope_pe", H3SightlineCoordinatePE(inner_dim, scale_gate_hidden))
+        # H3 is normally loaded in BF16.  Creating the new module in the
+        # projection's dtype avoids an otherwise easy-to-miss FP32/BF16 linear
+        # mismatch during standalone inference (training casts these weights
+        # before FSDP construction as well).
+        scope_pe = H3SightlineCoordinatePE(inner_dim, scale_gate_hidden)
+        weight = attn.qkv_proj.weight
+        scope_pe.to(device=weight.device, dtype=weight.dtype)
+        attn.add_module("scope_pe", scope_pe)
         # Make the inactive state explicit. Besides documenting the no-op
         # invariant, this prevents stale attributes should callers inspect or
         # reuse a pipeline before its first denoising call.
@@ -146,3 +161,30 @@ def set_scope_camera(pipe: Any, camera_poses: torch.Tensor, camera_x_fov: float 
     if not getattr(pipe, "_scope_h3_installed", False):
         raise RuntimeError("call install_scope_h3(pipe) before setting a camera")
     pipe._scope_h3_camera = (camera_poses, camera_x_fov)
+
+
+def load_scope_adapter_weights(pipe: Any, adapter_path: str) -> None:
+    """Load an adapter-only checkpoint exported by :func:`save_scope_adapter`.
+
+    This deliberately accepts a plain inference pipeline, not the training
+    wrapper.  It validates the exact set of SCoPE tensors before loading so a
+    checkpoint from a different H3 layout cannot be silently accepted.
+    """
+    from pathlib import Path
+
+    from safetensors.torch import load_file
+
+    if not getattr(pipe, "_scope_h3_installed", False):
+        raise RuntimeError("call install_scope_h3(pipe) before loading an adapter")
+    path = Path(adapter_path).expanduser().resolve()
+    if not path.is_file():
+        raise FileNotFoundError(f"adapter checkpoint does not exist: {path}")
+    state_dict = load_file(str(path), device="cpu")
+    expected = {name for name, _ in pipe.dit.named_parameters() if ".scope_pe." in name}
+    provided = set(state_dict)
+    if expected != provided:
+        raise ValueError(
+            f"{path}: adapter keys do not match this H3 model; "
+            f"missing={len(expected - provided)}, unexpected={len(provided - expected)}"
+        )
+    pipe.dit.load_state_dict(state_dict, strict=False)
